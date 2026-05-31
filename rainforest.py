@@ -34,11 +34,13 @@ def fetch_product_reviews(asin: str) -> dict:
     data = resp.json()
     product_data = data.get("product", {})
 
+    main_image = product_data.get("main_image", "")
     product_info = {
         "title": product_data.get("title"),
         "overall_rating": product_data.get("rating"),
         "total_reviews": product_data.get("ratings_total"),
         "asin": asin,
+        "image_url": main_image.get("link", "") if isinstance(main_image, dict) else str(main_image or ""),
     }
 
     raw_reviews = (

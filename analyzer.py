@@ -16,7 +16,7 @@ except Exception:
 
 client = anthropic.Anthropic(api_key=_anthropic_key)
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-5"
 
 SYSTEM_PROMPT = """You are a senior product strategist at a top e-commerce consulting firm \
 with 10 years of experience turning Amazon customer feedback into high-impact product and \
