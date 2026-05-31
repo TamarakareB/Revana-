@@ -1617,174 +1617,176 @@ def tab_competitor():
 
 
 def tab_export():
-    import json as _json
     if not st.session_state.analyzed:
-        empty_state("📥", "No analysis yet", "Run an analysis first to enable exports.")
+        st.info("Run an analysis first to export results.")
         return
 
-    a   = st.session_state.analysis
-    pi  = st.session_state.product_info
-    fs  = st.session_state.filter_stats
-    now = datetime.now().strftime("%B %d, %Y")
-    asin = pi.get("asin", "—")
-    score = a.get("overall_health_score", 0)
-    score_color = health_color(score)
+    import json as _json
 
-    complaints = a.get("complaint_themes", [])
-    praises    = a.get("praise_themes", [])
-    bullets    = a.get("listing_bullets", [])
+    a            = st.session_state.analysis
+    pi           = st.session_state.product_info
+    stats        = st.session_state.filter_stats
+    asin         = pi.get("asin", "")
+    title        = pi.get("title", "")[:60]
+    rating       = pi.get("overall_rating", "N/A")
+    health       = a.get("overall_health_score", 0)
+    summary      = a.get("executive_summary", "")
+    complaints   = a.get("complaint_themes", [])
+    praises      = a.get("praise_themes", [])
+    bullets      = a.get("listing_bullets", [])
+    keywords     = a.get("keyword_opportunities", [])
+    trusted_count = stats.get("trusted_count", 0)
+    fake_count   = stats.get("flagged_count", 0)
+    generated    = datetime.now().strftime("%B %d, %Y")
 
-    # ── Build complaint rows HTML ──
-    complaint_rows = ""
-    for i, t in enumerate(complaints[:5], 1):
-        freq      = t.get("frequency_pct", 0)
-        intensity = t.get("emotional_intensity", "low")
-        raw_rec   = t.get("improvement_recommendation", "")
-        rec       = _html.escape(raw_rec[:120])
-        badge_col = {"critical": "#EF4444", "high": "#F97316",
-                     "medium": "#F59E0B", "low": "#10B981"}.get(intensity.lower(), "#94A3B8")
-        complaint_rows += f"""
-        <div class="report-complaint-row">
-            <div class="report-complaint-rank">{i}</div>
-            <div style="flex:1;">
-                <div class="report-complaint-theme">{_html.escape(t.get('theme',''))}</div>
-                <div class="report-complaint-meta">
-                    {freq}% of reviews &nbsp;·&nbsp;
-                    <span style="color:{badge_col};font-weight:600;">{intensity.upper()}</span>
-                    &nbsp;·&nbsp; Impact: {_html.escape(t.get('estimated_rating_impact','—'))}
-                </div>
-                <div class="report-complaint-rec">→ {rec}{'…' if len(raw_rec)>120 else ''}</div>
-            </div>
-        </div>"""
-
-    # ── Build praise rows HTML ──
-    praise_rows = ""
-    for i, t in enumerate(praises[:3], 1):
-        freq      = t.get("frequency_pct", 0)
-        raw_angle = t.get("marketing_angle", "")
-        angle     = _html.escape(raw_angle[:100])
-        praise_rows += f"""
-        <div class="report-complaint-row">
-            <div class="report-complaint-rank praise">{i}</div>
-            <div style="flex:1;">
-                <div class="report-complaint-theme">{_html.escape(t.get('theme',''))}</div>
-                <div class="report-complaint-meta">{freq}% of reviews</div>
-                <div class="report-complaint-rec">📣 {angle}{'…' if len(raw_angle)>100 else ''}</div>
-            </div>
-        </div>"""
-
-    # ── Build bullet preview HTML ──
-    bullet_rows = ""
-    for i, b in enumerate(bullets[:5], 1):
-        cleaned = clean_bullet(b)
-        short   = _html.escape(cleaned[:110]) + ("…" if len(cleaned) > 110 else "")
-        bullet_rows += f"""
-        <div class="report-bullet-preview">
-            <span class="report-bullet-num">{i}</span>
-            <span>{short}</span>
-        </div>"""
-
-    # ── Build keyword chips ──
-    kw_chips = "".join(
-        f'<span style="display:inline-block;background:#EEF2FF;color:#4F46E5;'
-        f'border:1px solid #C7D2FE;border-radius:20px;padding:2px 10px;'
-        f'font-size:.72rem;font-weight:600;margin:2px;">{k}</span>'
-        for k in a.get("keyword_opportunities", [])[:8]
-    )
-
-    # ── Render the report preview card ──
+    # ── Report header card (pure inline styles only) ──
     st.markdown(f"""
-    <div class="report-preview">
-
-      <!-- Header -->
-      <div class="report-header">
-        <div style="position:relative;z-index:1;">
-          <div class="report-brand">Revana &nbsp;·&nbsp; Voice of Customer Brief</div>
-          <div class="report-title">{pi.get('title','Product')[:72]}{'…' if len(pi.get('title',''))>72 else ''}</div>
-          <div class="report-subtitle">AI-powered analysis by Claude · Anthropic</div>
-          <div class="report-meta">
-            <div class="report-meta-item">ASIN &nbsp;<span>{asin}</span></div>
-            <div class="report-meta-item">Rating &nbsp;<span>{pi.get('overall_rating','—')}/5</span></div>
-            <div class="report-meta-item">Reviews analysed &nbsp;<span>{fs.get('trusted_count',0)}</span></div>
-            <div class="report-meta-item">Fake filtered &nbsp;<span>{fs.get('flagged_count',0)}</span></div>
-            <div class="report-meta-item">Generated &nbsp;<span>{now}</span></div>
-          </div>
+    <div style="background:linear-gradient(135deg,#4F46E5,#7C3AED,#0891B2);
+                border-radius:16px 16px 0 0;padding:2rem 2.5rem;color:white;">
+        <div style="font-size:0.72rem;font-weight:700;letter-spacing:0.12em;
+                    text-transform:uppercase;opacity:0.8;margin-bottom:0.5rem;">
+            Revana · Voice of Customer Brief
         </div>
-      </div>
-
-      <!-- Body -->
-      <div class="report-body">
-
-        <!-- Health score strip -->
-        <div style="display:flex;align-items:center;gap:1.5rem;background:#F8FAFC;
-                    border-radius:12px;padding:1rem 1.25rem;margin-bottom:1.75rem;
-                    border:1px solid #E2E8F0;">
-          <div style="text-align:center;min-width:60px;">
-            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:2.5rem;
-                        font-weight:900;color:{score_color};line-height:1;">{score}</div>
-            <div style="font-size:.65rem;color:#94A3B8;text-transform:uppercase;
-                        letter-spacing:.5px;font-weight:600;">Health Score</div>
-          </div>
-          <div style="width:1px;height:48px;background:#E2E8F0;"></div>
-          <div style="flex:1;">
-            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;
-                        color:{score_color};font-size:.95rem;">{health_label(score)}</div>
-            <div style="font-size:.82rem;color:#64748B;margin-top:.2rem;line-height:1.5;">
-              {a.get('executive_summary','')[:200]}{'…' if len(a.get('executive_summary',''))>200 else ''}
-            </div>
-          </div>
+        <div style="font-size:1.4rem;font-weight:800;line-height:1.3;
+                    margin-bottom:1rem;">{_html.escape(title)}...</div>
+        <div style="font-size:0.8rem;opacity:0.75;margin-bottom:1rem;">
+            AI-powered analysis by Claude · Anthropic
         </div>
-
-        <!-- Executive Summary -->
-        <div class="report-section">
-          <div class="report-section-title">Executive Summary</div>
-          <div class="report-summary-text">{a.get('executive_summary','')}</div>
+        <div style="display:flex;gap:2rem;font-size:0.82rem;flex-wrap:wrap;">
+            <span><strong>ASIN</strong> {_html.escape(str(asin))}</span>
+            <span><strong>Rating</strong> {rating}/5</span>
+            <span><strong>Trusted reviews</strong> {trusted_count}</span>
+            <span><strong>Fake filtered</strong> {fake_count}</span>
+            <span><strong>Health score</strong> {health}/100</span>
+            <span><strong>Generated</strong> {generated}</span>
         </div>
-
-        <!-- Complaint Themes -->
-        <div class="report-section">
-          <div class="report-section-title">🔴 Top Complaint Themes</div>
-          {complaint_rows}
-        </div>
-
-        <!-- Praise Themes -->
-        <div class="report-section">
-          <div class="report-section-title">🟢 Top Praise Themes</div>
-          {praise_rows}
-        </div>
-
-        <!-- Listing Bullets -->
-        <div class="report-section">
-          <div class="report-section-title">✍️ AI-Optimized Listing Bullets</div>
-          {bullet_rows}
-        </div>
-
-        <!-- Keywords -->
-        <div class="report-section" style="margin-bottom:0;">
-          <div class="report-section-title">🔑 Keyword Opportunities</div>
-          <div style="margin-top:.25rem;">{kw_chips}</div>
-        </div>
-
-      </div><!-- /report-body -->
-
-      <!-- Footer bar -->
-      <div class="report-footer-bar">
-        <div class="report-footer-brand">⚡ Revana Report</div>
-        <div class="report-footer-meta">
-          Powered by Claude AI &nbsp;·&nbsp; Anthropic &nbsp;·&nbsp; {now}
-        </div>
-      </div>
-
-    </div><!-- /report-preview -->
+    </div>
     """, unsafe_allow_html=True)
 
-    # ── Download options ──
+    st.markdown(f"""
+    <div style="background:white;border:1px solid #E2E8F0;
+                border-top:none;border-radius:0 0 16px 16px;
+                padding:2rem 2.5rem;margin-bottom:2rem;">
+        <div style="font-size:0.7rem;font-weight:700;color:#4F46E5;
+                    text-transform:uppercase;letter-spacing:0.1em;
+                    margin-bottom:0.5rem;">Executive Summary</div>
+        <div style="font-size:0.9rem;color:#334155;line-height:1.7;
+                    background:#F8FAFC;border-left:3px solid #4F46E5;
+                    padding:0.85rem 1.1rem;border-radius:0 8px 8px 0;">
+            {_html.escape(summary)}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Two column preview — complaints + praise ──
+    col1, col2 = st.columns(2, gap="large")
+
+    with col1:
+        st.markdown("""
+        <div style="font-size:0.75rem;font-weight:700;color:#EF4444;
+                    text-transform:uppercase;letter-spacing:0.08em;
+                    margin-bottom:0.75rem;">🔴 Top Complaints</div>
+        """, unsafe_allow_html=True)
+        for i, t in enumerate(complaints[:3], 1):
+            st.markdown(f"""
+            <div style="background:#FEF2F2;border-left:3px solid #EF4444;
+                        border-radius:0 8px 8px 0;padding:0.75rem 1rem;
+                        margin-bottom:0.5rem;font-size:0.85rem;">
+                <div style="font-weight:700;color:#991B1B;margin-bottom:0.2rem;">
+                    {i}. {_html.escape(t.get('theme',''))}
+                </div>
+                <div style="color:#7F1D1D;font-size:0.78rem;">
+                    {t.get('frequency_pct',0)}% of reviews ·
+                    {_html.escape(t.get('emotional_intensity','').upper())}
+                </div>
+                <div style="color:#374151;font-size:0.8rem;margin-top:0.3rem;">
+                    → {_html.escape(t.get('improvement_recommendation','')[:120])}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div style="font-size:0.75rem;font-weight:700;color:#10B981;
+                    text-transform:uppercase;letter-spacing:0.08em;
+                    margin-bottom:0.75rem;">🟢 Top Praise</div>
+        """, unsafe_allow_html=True)
+        for i, t in enumerate(praises[:3], 1):
+            st.markdown(f"""
+            <div style="background:#ECFDF5;border-left:3px solid #10B981;
+                        border-radius:0 8px 8px 0;padding:0.75rem 1rem;
+                        margin-bottom:0.5rem;font-size:0.85rem;">
+                <div style="font-weight:700;color:#065F46;margin-bottom:0.2rem;">
+                    {i}. {_html.escape(t.get('theme',''))}
+                </div>
+                <div style="color:#064E3B;font-size:0.78rem;">
+                    {t.get('frequency_pct',0)}% of reviews
+                </div>
+                <div style="color:#374151;font-size:0.8rem;margin-top:0.3rem;">
+                    → {_html.escape(t.get('marketing_angle','')[:120])}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+
+    # ── Listing bullets preview (first 3 only) ──
     st.markdown("""
-    <div class="section-divider" style="margin-top:2rem;">
-        <div class="section-divider-line"></div>
-        <div class="section-divider-label">Download Options</div>
-        <div class="section-divider-line"></div>
-    </div>""", unsafe_allow_html=True)
+    <div style="font-size:0.75rem;font-weight:700;color:#4F46E5;
+                text-transform:uppercase;letter-spacing:0.08em;
+                margin-bottom:0.75rem;">✍️ AI-Optimized Listing Bullets (Preview)</div>
+    """, unsafe_allow_html=True)
+
+    for i, bullet in enumerate(bullets[:3], 1):
+        cleaned = clean_bullet(bullet)
+        st.markdown(f"""
+        <div style="background:#F8FAFC;border:1px solid #E2E8F0;
+                    border-radius:8px;padding:0.75rem 1rem;
+                    margin-bottom:0.4rem;font-size:0.85rem;
+                    color:#1E293B;display:flex;gap:0.75rem;">
+            <span style="background:linear-gradient(135deg,#4F46E5,#7C3AED);
+                         color:white;font-size:0.72rem;font-weight:700;
+                         width:22px;height:22px;border-radius:50%;
+                         display:inline-flex;align-items:center;
+                         justify-content:center;flex-shrink:0;">{i}</span>
+            <span>{_html.escape(cleaned)}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if len(bullets) > 3:
+        st.markdown(f"""
+        <div style="text-align:center;font-size:0.75rem;color:#94A3B8;
+                    margin-top:0.3rem;margin-bottom:1rem;">
+            + {len(bullets)-3} more bullets in full download
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── Keywords preview ──
+    if keywords:
+        st.markdown("""
+        <div style="font-size:0.75rem;font-weight:700;color:#4F46E5;
+                    text-transform:uppercase;letter-spacing:0.08em;
+                    margin:1rem 0 0.5rem;">🔑 Keyword Opportunities</div>
+        """, unsafe_allow_html=True)
+        kw_html = "".join([
+            f'<span style="display:inline-block;background:#EEF2FF;'
+            f'border:1px solid #C7D2FE;color:#4F46E5;font-size:0.78rem;'
+            f'font-weight:600;padding:4px 12px;border-radius:20px;margin:3px;">'
+            f'{_html.escape(kw)}</span>'
+            for kw in keywords[:8]
+        ])
+        st.markdown(f'<div style="margin-bottom:1.5rem">{kw_html}</div>',
+                    unsafe_allow_html=True)
+
+    st.markdown("<hr style='border-color:#E2E8F0;margin:1.5rem 0'>",
+                unsafe_allow_html=True)
+
+    # ── Download buttons ──
+    st.markdown("""
+    <div style="font-size:0.75rem;font-weight:700;color:#94A3B8;
+                text-transform:uppercase;letter-spacing:0.08em;
+                margin-bottom:1rem;">Download Options</div>
+    """, unsafe_allow_html=True)
 
     trusted = st.session_state.trusted_reviews.copy()
     if "date" in trusted.columns:
@@ -1793,41 +1795,41 @@ def tab_export():
     buf = io.StringIO()
     trusted.to_csv(buf, index=False)
 
-    e1, e2, e3 = st.columns(3, gap="large")
-    with e1:
-        st.markdown(f"""
-        <div class="export-card" style="border-top:3px solid {_INDIGO};">
-            <div class="export-icon">📄</div>
-            <div class="export-title">Full Report</div>
-            <div class="export-desc">Complete VoC brief — all themes, personas,<br>risk alerts, and recommendations</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-        st.download_button("⬇️  Download (.txt)", build_text_report(),
-                           file_name=f"revana_report_{asin}.txt",
-                           mime="text/plain", use_container_width=True)
-    with e2:
-        st.markdown(f"""
-        <div class="export-card" style="border-top:3px solid {_CYAN};">
-            <div class="export-icon">📊</div>
-            <div class="export-title">Reviews CSV</div>
-            <div class="export-desc">All trusted reviews with trust scores,<br>ratings, dates, and verification status</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-        st.download_button("⬇️  Download (.csv)", buf.getvalue(),
-                           file_name=f"revana_reviews_{asin}.csv",
-                           mime="text/csv", use_container_width=True)
-    with e3:
-        st.markdown(f"""
-        <div class="export-card" style="border-top:3px solid {_GREEN};">
-            <div class="export-icon">🔧</div>
-            <div class="export-title">Analysis JSON</div>
-            <div class="export-desc">Structured data for integration<br>into dashboards or other tools</div>
-        </div>""", unsafe_allow_html=True)
-        st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
-        st.download_button("⬇️  Download (.json)",
-                           _json.dumps(a, indent=2),
-                           file_name=f"revana_analysis_{asin}.json",
-                           mime="application/json", use_container_width=True)
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        st.download_button(
+            "📄 Download Full Report (.txt)",
+            data=build_text_report(),
+            file_name=f"revana_{asin}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    with c2:
+        st.download_button(
+            "📊 Download Reviews (.csv)",
+            data=buf.getvalue(),
+            file_name=f"revana_reviews_{asin}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with c3:
+        st.download_button(
+            "🔧 Download Analysis (.json)",
+            data=_json.dumps(a, indent=2),
+            file_name=f"revana_analysis_{asin}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+
+    st.markdown(f"""
+    <div style="text-align:center;padding:1.5rem;margin-top:1rem;
+                font-size:0.75rem;color:#94A3B8;
+                border-top:1px solid #E2E8F0;">
+        <strong style="color:#4F46E5;">Revana</strong> ·
+        AI-Powered Review Intelligence ·
+        Powered by Claude AI · Anthropic
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
