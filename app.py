@@ -332,7 +332,6 @@ for _k, _v in _DEFAULTS.items():
 
 # ── Design tokens ─────────────────────────────────────────────────────────
 _INDIGO  = "#4F46E5"
-_VIOLET  = "#7C3AED"
 _CYAN    = "#06B6D4"
 _GREEN   = "#10B981"
 _AMBER   = "#F59E0B"
@@ -341,7 +340,6 @@ _DARK    = "#0F172A"
 _SLATE   = "#475569"
 _MUTED   = "#94A3B8"
 _BORDER  = "#E2E8F0"
-_BG_CARD = "rgba(248,250,255,0.7)"
 _GRID    = "#E2E8F0"
 _FONT    = dict(color=_SLATE, family="Inter, sans-serif", size=11)
 _FONT_HED = dict(color=_DARK, family="Plus Jakarta Sans, sans-serif", size=12)
@@ -525,6 +523,36 @@ def metric_card_html(icon: str, label: str, value: str, color: str = "indigo",
         <div class="metric-value">{value}</div>
         {sub_html}
     </div>"""
+
+_IMG_PLACEHOLDER = (
+    '<div style="width:120px;height:120px;background:#F1F5F9;border-radius:8px;'
+    'display:flex;align-items:center;justify-content:center;font-size:2rem;">📦</div>'
+)
+
+def _load_image(url: str, width: int = 120):
+    """Display a product image from a local path or remote URL; fall back to 📦."""
+    import requests
+    from io import BytesIO as _BytesIO
+    if not url:
+        st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+        return
+    if not url.startswith("http"):
+        # Local asset — st.image handles file paths directly
+        try:
+            st.image(url, width=width)
+        except Exception:
+            st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+        return
+    # Remote URL — fetch as bytes so server-side proxy bypasses CDN blocks
+    try:
+        r = requests.get(url, timeout=4, headers={"User-Agent": "Mozilla/5.0"})
+        if r.status_code == 200:
+            st.image(_BytesIO(r.content), width=width)
+            return
+    except Exception:
+        pass
+    st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+
 
 def clean_bullet(text: str) -> str:
     text = re.sub(r'\[[^\]]{1,40}\]', '', text)
@@ -801,33 +829,24 @@ def tab_overview():
     dist = st.session_state.rating_distribution
 
     # ── Product header ──
-    title      = pi.get('title', 'Product')
-    image_url  = pi.get('image_url', '')
-    if image_url:
-        col_img, col_title = st.columns([1, 4], gap="large")
-        with col_img:
-            st.image(image_url, width=120)
-        with col_title:
-            st.markdown(f"""
-            <div style="margin-bottom:8px;">
-                <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.1rem;
-                            font-weight:700;color:#0F172A;line-height:1.4;margin-bottom:8px;">
-                    {title[:100]}{'…' if len(title) > 100 else ''}
-                </div>
-                <span class="product-pill">ASIN: {pi.get('asin')}</span>
-                <span class="product-pill">⭐ {pi.get('overall_rating')}/5</span>
-                <span class="product-pill">{pi.get('total_reviews',0):,} total reviews</span>
-            </div>""", unsafe_allow_html=True)
-    else:
+    title = pi.get('title', 'Product')
+    col_img, col_text = st.columns([1, 4], gap="large")
+    with col_img:
+        image_url = pi.get('image_url', '')
+        if image_url:
+            _load_image(image_url, width=120)
+        else:
+            st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+    with col_text:
         st.markdown(f"""
         <div style="margin-bottom:8px;">
-            <h2 style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.4rem;
-                       font-weight:800;color:#0F172A;margin-bottom:8px;">
-                {title[:90]}{'…' if len(title) > 90 else ''}
-            </h2>
+            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.1rem;
+                        font-weight:700;color:#0F172A;line-height:1.4;margin-bottom:8px;">
+                {title[:100]}{'…' if len(title) > 100 else ''}
+            </div>
             <span class="product-pill">ASIN: {pi.get('asin')}</span>
             <span class="product-pill">⭐ {pi.get('overall_rating')}/5</span>
-            <span class="product-pill">{pi.get('total_reviews',0):,} total reviews</span>
+            <span class="product-pill">{pi.get('total_reviews', 0):,} total reviews</span>
         </div>""", unsafe_allow_html=True)
 
     # ── Small sample size notice (Bug 10) ──
@@ -1120,23 +1139,6 @@ def tab_overview():
             st.markdown('<div class="mini-label">📅 Seasonal Patterns</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="callout">{a.get("seasonal_patterns","")}</div>',
                         unsafe_allow_html=True)
-
-
-def _keyword_tags_html(keywords: list) -> str:
-    """Inline chip version — still used in the report preview card."""
-    colors = [
-        ("EEF2FF", "4F46E5", "C7D2FE"),
-        ("ECFEFF", "0891B2", "A5F3FC"),
-        ("F0FDF4", "15803D", "BBF7D0"),
-        ("FDF4FF", "9333EA", "E9D5FF"),
-        ("FFF7ED", "C2410C", "FED7AA"),
-    ]
-    html = ""
-    for i, kw in enumerate(keywords):
-        bg, text, border = colors[i % len(colors)]
-        html += (f'<span class="keyword-tag" style="background:#{bg};color:#{text};'
-                 f'border:1px solid #{border}">🔑 {kw}</span>')
-    return html
 
 
 def _keyword_placement(kw: str) -> tuple[str, str, str, str, str]:
@@ -1444,7 +1446,6 @@ def tab_trends():
     arrow = "↑" if direction == "improving" else ("↓" if direction == "declining" else "→")
     color = _GREEN if direction == "improving" else (_RED if direction == "declining" else _AMBER)
     bg_map = {_GREEN: "#ECFDF5", _RED: "#FEF2F2", _AMBER: "#FFFBEB"}
-    bdr_map = {_GREEN: "#6EE7B7", _RED: "#FECACA", _AMBER: "#FCD34D"}
     trend_display = "Limited Data" if len(monthly) < 3 else direction.title()
 
     # ── Summary strip ──
@@ -1529,29 +1530,45 @@ def tab_competitor():
     # ── Header ──
     h1, h2 = st.columns(2, gap="large")
     with h1:
-        st.markdown(f"""
-        <div class="comp-card-mine">
-            <div class="mini-label" style="color:{_INDIGO};">My Product</div>
-            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:.95rem;
-                        font-weight:700;color:#0F172A;margin:8px 0;">
-                {pi.get('title','')[:70]}…</div>
-            <span style="font-size:1.5rem;font-weight:800;color:{_INDIGO};">
-                {pi.get('overall_rating')}/5</span>
-            <span style="color:{_MUTED};font-size:.8rem;margin-left:8px;">
-                {pi.get('total_reviews',0):,} reviews</span>
-        </div>""", unsafe_allow_html=True)
+        ci1, ct1 = st.columns([1, 3], gap="medium")
+        with ci1:
+            my_img = pi.get('image_url', '')
+            if my_img:
+                _load_image(my_img, width=80)
+            else:
+                st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+        with ct1:
+            st.markdown(f"""
+            <div class="comp-card-mine">
+                <div class="mini-label" style="color:{_INDIGO};">My Product</div>
+                <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:.95rem;
+                            font-weight:700;color:#0F172A;margin:8px 0;">
+                    {pi.get('title','')[:70]}…</div>
+                <span style="font-size:1.5rem;font-weight:800;color:{_INDIGO};">
+                    {pi.get('overall_rating')}/5</span>
+                <span style="color:{_MUTED};font-size:.8rem;margin-left:8px;">
+                    {pi.get('total_reviews',0):,} reviews</span>
+            </div>""", unsafe_allow_html=True)
     with h2:
-        st.markdown(f"""
-        <div class="comp-card-comp">
-            <div class="mini-label" style="color:{_AMBER};">Competitor</div>
-            <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:.95rem;
-                        font-weight:700;color:#0F172A;margin:8px 0;">
-                {comp_pi.get('title','')[:70]}…</div>
-            <span style="font-size:1.5rem;font-weight:800;color:{_AMBER};">
-                {comp_pi.get('overall_rating')}/5</span>
-            <span style="color:{_MUTED};font-size:.8rem;margin-left:8px;">
-                {comp_pi.get('total_reviews',0):,} reviews</span>
-        </div>""", unsafe_allow_html=True)
+        ci2, ct2 = st.columns([1, 3], gap="medium")
+        with ci2:
+            comp_img = comp_pi.get('image_url', '')
+            if comp_img:
+                _load_image(comp_img, width=80)
+            else:
+                st.markdown(_IMG_PLACEHOLDER, unsafe_allow_html=True)
+        with ct2:
+            st.markdown(f"""
+            <div class="comp-card-comp">
+                <div class="mini-label" style="color:{_AMBER};">Competitor</div>
+                <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:.95rem;
+                            font-weight:700;color:#0F172A;margin:8px 0;">
+                    {comp_pi.get('title','')[:70]}…</div>
+                <span style="font-size:1.5rem;font-weight:800;color:{_AMBER};">
+                    {comp_pi.get('overall_rating')}/5</span>
+                <span style="color:{_MUTED};font-size:.8rem;margin-left:8px;">
+                    {comp_pi.get('total_reviews',0):,} reviews</span>
+            </div>""", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -1899,7 +1916,7 @@ def main():
             if not demo_mode and not asin.strip():
                 st.error("Enter an ASIN or enable Demo Mode.")
             else:
-                run_analysis(asin.strip() if not demo_mode else "DEMO001",
+                run_analysis(asin.strip() if not demo_mode else "DEMO_STANLEY",
                              comp_asin.strip(), demo_mode)
 
         # ── How it works ──
