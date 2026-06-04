@@ -675,6 +675,133 @@ def empty_state(icon: str, title: str, body: str):
     </div>""", unsafe_allow_html=True)
 
 # ── Report exporter ───────────────────────────────────────────────────────
+def build_pdf_report() -> bytes:
+    from fpdf import FPDF
+
+    ss = st.session_state
+    a  = ss.analysis
+    pi = ss.product_info
+
+    class PDF(FPDF):
+        def header(self):
+            self.set_fill_color(79, 70, 229)
+            self.rect(0, 0, 210, 18, "F")
+            self.set_font("Helvetica", "B", 11)
+            self.set_text_color(255, 255, 255)
+            self.set_y(5)
+            self.cell(0, 8, "Revana  Voice of Customer Brief", align="C")
+            self.set_text_color(30, 27, 75)
+            self.ln(14)
+
+        def footer(self):
+            self.set_y(-12)
+            self.set_font("Helvetica", "", 8)
+            self.set_text_color(148, 163, 184)
+            self.cell(0, 6, f"Powered by Revana  x  Claude AI  x  Anthropic    |    Page {self.page_no()}", align="C")
+
+    def _safe(text):
+        return (text or "").encode("latin-1", errors="replace").decode("latin-1")
+
+    def section_title(pdf, text):
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(79, 70, 229)
+        pdf.set_fill_color(238, 242, 255)
+        pdf.cell(0, 7, _safe(text.upper()), fill=True, ln=True)
+        pdf.set_text_color(30, 41, 59)
+        pdf.ln(1)
+
+    def body_text(pdf, text, indent=0):
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(51, 65, 85)
+        pdf.set_x(10 + indent)
+        pdf.multi_cell(190 - indent, 5, _safe(text))
+
+    pdf = PDF()
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    pdf.set_margins(10, 20, 10)
+
+    # ── Product header ──
+    title = pi.get("title", "Product")[:90]
+    asin  = pi.get("asin", "—")
+    rating = pi.get("overall_rating", "N/A")
+    health = a.get("overall_health_score", 0)
+    now    = datetime.now().strftime("%B %d, %Y")
+
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_text_color(15, 23, 42)
+    pdf.multi_cell(0, 7, _safe(title))
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(100, 116, 139)
+    pdf.cell(0, 5, f"ASIN: {_safe(str(asin))}   |   Rating: {rating}/5   |   Health Score: {health}/100   |   {now}", ln=True)
+    pdf.ln(4)
+
+    # ── Executive summary ──
+    section_title(pdf, "Executive Summary")
+    body_text(pdf, a.get("executive_summary", ""))
+    pdf.ln(4)
+
+    # ── Complaint themes ──
+    section_title(pdf, "Top Complaint Themes")
+    intensity_labels = {"critical": "[CRITICAL]", "high": "[HIGH]", "medium": "[MEDIUM]", "low": "[LOW]"}
+    for i, t in enumerate(a.get("complaint_themes", [])[:5], 1):
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(185, 28, 28)
+        intensity = intensity_labels.get(t.get("emotional_intensity", "").lower(), "")
+        pdf.cell(0, 5, f"{i}. {_safe(t.get('theme',''))}  {intensity}  —  {t.get('frequency_pct',0)}% of reviews", ln=True)
+        body_text(pdf, t.get("improvement_recommendation", ""), indent=6)
+        impact = t.get("estimated_rating_impact", "")
+        if impact:
+            pdf.set_font("Helvetica", "I", 8)
+            pdf.set_text_color(79, 70, 229)
+            pdf.set_x(16)
+            pdf.cell(0, 4, f"Impact: {_safe(str(impact))}", ln=True)
+        pdf.ln(2)
+    pdf.ln(2)
+
+    # ── Praise themes ──
+    section_title(pdf, "Top Praise Themes")
+    for i, t in enumerate(a.get("praise_themes", [])[:4], 1):
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(5, 150, 105)
+        pdf.cell(0, 5, f"{i}. {_safe(t.get('theme',''))}  —  {t.get('frequency_pct',0)}% of reviews", ln=True)
+        body_text(pdf, t.get("marketing_angle", ""), indent=6)
+        pdf.ln(2)
+    pdf.ln(2)
+
+    # ── Risk alerts ──
+    section_title(pdf, "Risk Alerts")
+    sev_colors = {"critical": (220, 38, 38), "high": (234, 88, 12), "medium": (245, 158, 11), "low": (16, 185, 129)}
+    for r in a.get("risk_alerts", []):
+        sev = r.get("severity", "low").lower()
+        rc = sev_colors.get(sev, (100, 116, 139))
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*rc)
+        pdf.cell(0, 5, f"[{sev.upper()}] {_safe(r.get('alert_type',''))}", ln=True)
+        body_text(pdf, r.get("description", ""), indent=6)
+        pdf.set_font("Helvetica", "I", 8)
+        pdf.set_text_color(71, 85, 105)
+        pdf.set_x(16)
+        pdf.multi_cell(184, 4, f"Action: {_safe(r.get('recommended_action',''))}")
+        pdf.ln(2)
+    pdf.ln(2)
+
+    # ── Listing bullets ──
+    section_title(pdf, "AI-Optimized Listing Bullets")
+    for i, b in enumerate(a.get("listing_bullets", []), 1):
+        cleaned = clean_bullet(b)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(79, 70, 229)
+        pdf.set_x(10)
+        pdf.cell(6, 5, f"{i}.")
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(30, 41, 59)
+        pdf.multi_cell(184, 5, _safe(cleaned))
+        pdf.ln(1)
+
+    return bytes(pdf.output())
+
+
 def build_text_report() -> str:
     ss = st.session_state
     a  = ss.analysis
@@ -1815,10 +1942,10 @@ def tab_export():
     c1, c2, c3 = st.columns(3, gap="medium")
     with c1:
         st.download_button(
-            "📄 Download Full Report (.txt)",
-            data=build_text_report(),
-            file_name=f"revana_{asin}.txt",
-            mime="text/plain",
+            "📄 Download Full Report (.pdf)",
+            data=build_pdf_report(),
+            file_name=f"revana_{asin}.pdf",
+            mime="application/pdf",
             use_container_width=True,
         )
     with c2:
