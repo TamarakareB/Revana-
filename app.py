@@ -682,6 +682,11 @@ def build_pdf_report() -> bytes:
     a  = ss.analysis
     pi = ss.product_info
 
+    def _safe(text):
+        if not text:
+            return ""
+        return str(text).encode("latin-1", errors="replace").decode("latin-1")
+
     class PDF(FPDF):
         def header(self):
             self.set_fill_color(79, 70, 229)
@@ -689,7 +694,7 @@ def build_pdf_report() -> bytes:
             self.set_font("Helvetica", "B", 11)
             self.set_text_color(255, 255, 255)
             self.set_y(5)
-            self.cell(0, 8, "Revana  Voice of Customer Brief", align="C")
+            self.cell(0, 8, _safe("Revana  Voice of Customer Brief"), align="C")
             self.set_text_color(30, 27, 75)
             self.ln(14)
 
@@ -697,10 +702,7 @@ def build_pdf_report() -> bytes:
             self.set_y(-12)
             self.set_font("Helvetica", "", 8)
             self.set_text_color(148, 163, 184)
-            self.cell(0, 6, f"Powered by Revana  x  Claude AI  x  Anthropic    |    Page {self.page_no()}", align="C")
-
-    def _safe(text):
-        return (text or "").encode("latin-1", errors="replace").decode("latin-1")
+            self.cell(0, 6, _safe(f"Powered by Revana x Claude AI x Anthropic  |  Page {self.page_no()}"), align="C")
 
     def section_title(pdf, text):
         pdf.set_font("Helvetica", "B", 10)
@@ -722,18 +724,18 @@ def build_pdf_report() -> bytes:
     pdf.set_margins(10, 20, 10)
 
     # ── Product header ──
-    title = pi.get("title", "Product")[:90]
-    asin  = pi.get("asin", "—")
-    rating = pi.get("overall_rating", "N/A")
-    health = a.get("overall_health_score", 0)
-    now    = datetime.now().strftime("%B %d, %Y")
+    title  = _safe(str(pi.get("title", "Product"))[:90])
+    asin   = _safe(str(pi.get("asin", "")))
+    rating = _safe(str(pi.get("overall_rating", "N/A")))
+    health = _safe(str(a.get("overall_health_score", 0)))
+    now    = _safe(datetime.now().strftime("%B %d, %Y"))
 
     pdf.set_font("Helvetica", "B", 13)
     pdf.set_text_color(15, 23, 42)
-    pdf.multi_cell(0, 7, _safe(title))
+    pdf.multi_cell(0, 7, title)
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(100, 116, 139)
-    pdf.cell(0, 5, f"ASIN: {_safe(str(asin))}   |   Rating: {rating}/5   |   Health Score: {health}/100   |   {now}", ln=True)
+    pdf.cell(0, 5, _safe(f"ASIN: {asin}   |   Rating: {rating}/5   |   Health Score: {health}/100   |   {now}"), ln=True)
     pdf.ln(4)
 
     # ── Executive summary ──
@@ -748,14 +750,16 @@ def build_pdf_report() -> bytes:
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(185, 28, 28)
         intensity = intensity_labels.get(t.get("emotional_intensity", "").lower(), "")
-        pdf.cell(0, 5, f"{i}. {_safe(t.get('theme',''))}  {intensity}  —  {t.get('frequency_pct',0)}% of reviews", ln=True)
+        theme     = _safe(t.get("theme", ""))
+        freq      = _safe(str(t.get("frequency_pct", 0)))
+        pdf.cell(0, 5, _safe(f"{i}. {theme}  {intensity}  {freq}% of reviews"), ln=True)
         body_text(pdf, t.get("improvement_recommendation", ""), indent=6)
         impact = t.get("estimated_rating_impact", "")
         if impact:
             pdf.set_font("Helvetica", "I", 8)
             pdf.set_text_color(79, 70, 229)
             pdf.set_x(16)
-            pdf.cell(0, 4, f"Impact: {_safe(str(impact))}", ln=True)
+            pdf.cell(0, 4, _safe(f"Impact: {impact}"), ln=True)
         pdf.ln(2)
     pdf.ln(2)
 
@@ -764,7 +768,9 @@ def build_pdf_report() -> bytes:
     for i, t in enumerate(a.get("praise_themes", [])[:4], 1):
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(5, 150, 105)
-        pdf.cell(0, 5, f"{i}. {_safe(t.get('theme',''))}  —  {t.get('frequency_pct',0)}% of reviews", ln=True)
+        theme = _safe(t.get("theme", ""))
+        freq  = _safe(str(t.get("frequency_pct", 0)))
+        pdf.cell(0, 5, _safe(f"{i}. {theme}  {freq}% of reviews"), ln=True)
         body_text(pdf, t.get("marketing_angle", ""), indent=6)
         pdf.ln(2)
     pdf.ln(2)
@@ -774,15 +780,15 @@ def build_pdf_report() -> bytes:
     sev_colors = {"critical": (220, 38, 38), "high": (234, 88, 12), "medium": (245, 158, 11), "low": (16, 185, 129)}
     for r in a.get("risk_alerts", []):
         sev = r.get("severity", "low").lower()
-        rc = sev_colors.get(sev, (100, 116, 139))
+        rc  = sev_colors.get(sev, (100, 116, 139))
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(*rc)
-        pdf.cell(0, 5, f"[{sev.upper()}] {_safe(r.get('alert_type',''))}", ln=True)
+        pdf.cell(0, 5, _safe(f"[{sev.upper()}] {r.get('alert_type', '')}"), ln=True)
         body_text(pdf, r.get("description", ""), indent=6)
         pdf.set_font("Helvetica", "I", 8)
         pdf.set_text_color(71, 85, 105)
         pdf.set_x(16)
-        pdf.multi_cell(184, 4, f"Action: {_safe(r.get('recommended_action',''))}")
+        pdf.multi_cell(184, 4, _safe(f"Action: {r.get('recommended_action', '')}"))
         pdf.ln(2)
     pdf.ln(2)
 
@@ -793,7 +799,7 @@ def build_pdf_report() -> bytes:
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(79, 70, 229)
         pdf.set_x(10)
-        pdf.cell(6, 5, f"{i}.")
+        pdf.cell(6, 5, _safe(str(i) + "."))
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(30, 41, 59)
         pdf.multi_cell(184, 5, _safe(cleaned))
